@@ -10,7 +10,6 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Serve static files from React build (only if build directory exists)
 if (fs.existsSync(path.join(__dirname, 'build'))) {
   app.use(express.static(path.join(__dirname, 'build')));
 } else {
@@ -22,7 +21,6 @@ const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const PORT = process.env.PORT || 3000;
 
-// Emergency codewords (case insensitive)
 const CODEWORDS = [
   "whens the family gathering",
   "are you still single", 
@@ -32,7 +30,6 @@ const CODEWORDS = [
   "call police"
 ];
 
-// Store for emergency alerts
 let emergencyAlerts = [];
 
 
@@ -144,7 +141,7 @@ app.post('/webhook/telnyx', async (req, res) => {
           language: 'en-US'
         });
         
-        // Start gathering speech input
+        
         await callTelnyxAPI(callId, 'gather', {
           input_type: 'speech',
           language: 'en-US',
@@ -203,16 +200,16 @@ app.post('/webhook/telnyx', async (req, res) => {
           aiResponse = "I understand you may need help. Emergency services have been notified. Please stay on the line. Are you in immediate danger?";
           
         } else {
-          // Get AI response from Groq
+         
           aiResponse = await getGroqResponse(spokenText, context);
         }
         
-        // Update conversation context
+        
         context.push({ role: 'user', content: spokenText });
         context.push({ role: 'assistant', content: aiResponse });
         conversationContext.set(callId, context.slice(-6)); // Keep last 6 messages
         
-        // Speak the response
+       
         await callTelnyxAPI(callId, 'speak', {
           payload: aiResponse,
           voice: 'female',
@@ -259,7 +256,7 @@ app.post('/webhook/telnyx', async (req, res) => {
   }
 });
 
-// API endpoint for emergency notifications from frontend
+
 app.post('/api/emergency', (req, res) => {
   try {
     const { codeword, location, timestamp } = req.body;
@@ -321,7 +318,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-
 app.get('*', (req, res) => {
   const buildPath = path.join(__dirname, 'build', 'index.html');
   if (fs.existsSync(buildPath)) {
@@ -334,28 +330,10 @@ app.get('*', (req, res) => {
   }
 });
 
-
 app.use((error, req, res, next) => {
   console.error('Unhandled error:', error);
   res.status(500).json({ error: 'Internal server error' });
 });
-
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📞 Telnyx webhook URL: http://your-domain.com/webhook/telnyx`);
-  console.log(`🔧 Health check: http://localhost:${PORT}/health`);
-  
-  // Validate environment variables
-  if (!TELNYX_API_KEY) {
-    console.warn('⚠️  TELNYX_API_KEY not set - Telnyx features will not work');
-  }
-  if (!GROQ_API_KEY) {
-    console.warn('⚠️  GROQ_API_KEY not set - AI responses will not work');
-  }
-});
-
-
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   process.exit(0);

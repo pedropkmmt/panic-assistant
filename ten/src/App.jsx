@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Phone, AlertTriangle, Bell, Key, Eye, EyeOff, PhoneOff, Mic, MicOff, Settings
 } from 'lucide-react';
+
+
 const VoiceAssistantApp = () => {
   const [chatMessages, setChatMessages] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
@@ -23,21 +25,18 @@ const VoiceAssistantApp = () => {
   const [telnyxConfig, setTelnyxConfig] = useState({
     sipUsername: '',
     sipPassword: '',
-    destinationNumber: ''
+    destinationNumber: 'sip:assistant@your-app.sip.telnyx.com'
   });
   const [showTelnyxConfig, setShowTelnyxConfig] = useState(false);
   
-
   const recognition = useRef(null);
   const telnyxClientRef = useRef(null);
   const telnyxCallRef = useRef(null);
-
 
   useEffect(() => {
     setApiConfigured(apiKey.trim().length > 0);
   }, [apiKey]);
 
- 
   const callGroq = async (message, messages = []) => {
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -96,7 +95,6 @@ const VoiceAssistantApp = () => {
     });
   };
 
-  // Check for emergency codewords
   const checkForEmergency = async (text) => {
     const triggered = codewords.find(cw =>
       cw.active && text.toLowerCase().includes(cw.phrase.toLowerCase())
@@ -110,10 +108,8 @@ const VoiceAssistantApp = () => {
         timestamp: new Date() 
       });
       
-      // Auto-clear emergency alert after 15 seconds
       setTimeout(() => setEmergencyTriggered(null), 15000);
       
-      // Send emergency notification to backend
       try {
         await fetch('/api/emergency', {
           method: 'POST',
@@ -133,7 +129,6 @@ const VoiceAssistantApp = () => {
     return false;
   };
 
-  // Browser Speech Recognition
   const startBrowserVoiceCall = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -168,7 +163,6 @@ const VoiceAssistantApp = () => {
         };
         setChatMessages(prev => [...prev, userMsg]);
 
-        // Check for emergency
         const isEmergency = await checkForEmergency(spokenText);
         
         if (!apiConfigured) {
@@ -176,7 +170,6 @@ const VoiceAssistantApp = () => {
           return;
         }
 
-        // Get AI response
         setIsLoadingResponse(true);
         try {
           const reply = await callGroq(spokenText, chatMessages);
@@ -188,7 +181,6 @@ const VoiceAssistantApp = () => {
           };
           setChatMessages(prev => [...prev, aiMsg]);
           
-          // Speak the response
           speakText(reply);
         } catch (error) {
           console.error('Error getting AI response:', error);
@@ -211,7 +203,6 @@ const VoiceAssistantApp = () => {
 
     recognition.current.onend = () => {
       if (isCallActive) {
-        // Restart recognition if call is still active
         setTimeout(() => {
           if (isCallActive && recognition.current) {
             recognition.current.start();
@@ -223,10 +214,8 @@ const VoiceAssistantApp = () => {
     recognition.current.start();
   };
 
-  // Text-to-Speech function
   const speakText = (text) => {
     const synth = window.speechSynthesis;
-    // Cancel any ongoing speech
     synth.cancel();
     
     const utterance = new SpeechSynthesisUtterance(text);
@@ -234,7 +223,6 @@ const VoiceAssistantApp = () => {
     utterance.pitch = 1;
     utterance.volume = 1;
     
-    // Use a female voice if available
     const voices = synth.getVoices();
     const femaleVoice = voices.find(voice => 
       voice.name.includes('Female') || 
@@ -248,220 +236,86 @@ const VoiceAssistantApp = () => {
     synth.speak(utterance);
   };
 
-// Fixed Telnyx WebRTC functions - Version compatible approach
-const startTelnyxCall = async () => {
-  if (!telnyxConfig.sipUsername || !telnyxConfig.sipPassword) {
-    alert('Please configure your Telnyx SIP credentials first.');
-    setShowTelnyxConfig(true);
-    return;
-  }
 
-  try {
-    // Dynamically import Telnyx WebRTC
-    const { TelnyxRTC } = await import('@telnyx/webrtc');
-    
-    setTelnyxCallStatus('connecting');
-    
-    const client = new TelnyxRTC({
-      login: telnyxConfig.sipUsername,
-      password: telnyxConfig.sipPassword,
-      audio: true,
-      video: false
-    });
 
-    telnyxClientRef.current = client;
-
-    // Handle all events at the client level
-    client.on('telnyx.ready', () => {
-      console.log('Telnyx client ready');
-      
-      try {
-        // Create and connect the call
-        const call = client.newCall({ 
-          destinationNumber: telnyxConfig.destinationNumber || telnyxConfig.sipUsername 
-        });
-        
-        telnyxCallRef.current = call;
-        
-        // Try different connection methods based on available methods
-        if (typeof call.connect === 'function') {
-          call.connect();
-          console.log('Call connection initiated with connect()');
-        } else if (typeof call.start === 'function') {
-          call.start();
-          console.log('Call connection initiated with start()');
-        } else if (typeof call.dial === 'function') {
-          call.dial();
-          console.log('Call connection initiated with dial()');
-        } else {
-          console.error('No connect method found on call object');
-          console.log('Available call methods:', Object.getOwnPropertyNames(call));
-          setTelnyxCallStatus('error');
-          return;
-        }
-        
-      } catch (callError) {
-        console.error('Error creating/connecting call:', callError);
-        setTelnyxCallStatus('error');
-        alert(`Failed to create call: ${callError.message}`);
-      }
-    });
-
-    // Handle all call state changes through client notifications
-    client.on('telnyx.notification', (notification) => {
-      console.log('Telnyx notification:', notification);
-      
-      // Handle call state changes
-      if (notification.call) {
-        const callState = notification.call.state;
-        console.log('Call state changed to:', callState);
-        
-        switch (callState) {
-          case 'new':
-            setTelnyxCallStatus('connecting');
-            break;
-          case 'ringing':
-            setTelnyxCallStatus('ringing');
-            break;
-          case 'active':
-            setTelnyxCallStatus('active');
-            break;
-          case 'hangup':
-          case 'destroy':
-          case 'purge':
-            setTelnyxCallStatus('idle');
-            break;
-          default:
-            console.log('Unknown call state:', callState);
-        }
-      }
-    });
-
-    // Handle client-level errors
-    client.on('telnyx.error', (error) => {
-      console.error('Telnyx client error:', error);
-      setTelnyxCallStatus('error');
-      alert(`Telnyx error: ${error.message || 'Connection failed'}`);
-    });
-
-    client.on('telnyx.socket.error', (error) => {
-      console.error('Telnyx socket error:', error);
-      setTelnyxCallStatus('error');
-    });
-
-    client.on('telnyx.socket.close', () => {
-      console.log('Telnyx socket closed');
-      setTelnyxCallStatus('idle');
-    });
-
-    // Connect the client
-    client.connect();
-    
-  } catch (error) {
-    console.error('Failed to initialize Telnyx WebRTC:', error);
-    setTelnyxCallStatus('error');
-    alert('Failed to load Telnyx WebRTC. Make sure the library is installed.');
-  }
-};
-
-const endTelnyxCall = () => {
-  try {
-    if (telnyxCallRef.current) {
-      telnyxCallRef.current.hangup();
-      telnyxCallRef.current = null;
+ const startTelnyxCall = async () => {
+    if (!telnyxConfig.sipUsername || !telnyxConfig.sipPassword) {
+      alert('Please configure your Telnyx SIP credentials first.');
+      setShowTelnyxConfig(true);
+      return;
     }
-    if (telnyxClientRef.current) {
-      telnyxClientRef.current.disconnect();
-      telnyxClientRef.current = null;
-    }
-  } catch (error) {
-    console.error('Error ending call:', error);
-  } finally {
-    setTelnyxCallStatus('idle');
-  }
-};
 
-// Simplified alternative using client.dial directly
-const startTelnyxCallSimple = async () => {
-  if (!telnyxConfig.sipUsername || !telnyxConfig.sipPassword) {
-    alert('Please configure your Telnyx SIP credentials first.');
-    setShowTelnyxConfig(true);
-    return;
-  }
+    try {
+      const { TelnyxRTC } = await import('@telnyx/webrtc');
 
-  try {
-    const { TelnyxRTC } = await import('@telnyx/webrtc');
-    
-    setTelnyxCallStatus('connecting');
-    
-    const client = new TelnyxRTC({
-      login: telnyxConfig.sipUsername,
-      password: telnyxConfig.sipPassword
-    });
+      setTelnyxCallStatus('connecting');
 
-    telnyxClientRef.current = client;
+      const client = new TelnyxRTC({
+        login: telnyxConfig.sipUsername,
+        password: telnyxConfig.sipPassword
+      });
 
-    client.on('telnyx.ready', () => {
-      console.log('Telnyx client ready, attempting to dial...');
-      
-      try {
-        // Try direct dial method
-        if (typeof client.dial === 'function') {
-          const call = client.dial(telnyxConfig.destinationNumber || telnyxConfig.sipUsername);
+      telnyxClientRef.current = client;
+
+      client.on('telnyx.ready', () => {
+        console.log('Telnyx client ready, attempting to dial AI assistant...');
+
+        try {
+          const call = client.newCall({
+          destinationNumber: telnyxConfig.destinationNumber
+          }); 
+
+telnyxCallRef.current = call;
+console.log('Dial to AI Assistant initiated');
+
           telnyxCallRef.current = call;
-          console.log('Dial initiated');
-        } else {
-          console.error('client.dial method not available');
-          console.log('Available client methods:', Object.getOwnPropertyNames(client));
+          console.log('Dial to AI Assistant initiated');
+        } catch (dialError) {
+          console.error('Error dialing:', dialError);
+          setTelnyxCallStatus('error');
+          alert(`Failed to dial: ${dialError.message}`);
         }
-        
-      } catch (dialError) {
-        console.error('Error dialing:', dialError);
+      });
+
+      client.on('telnyx.notification', (notification) => {
+        console.log('Notification received:', notification);
+
+        if (notification.call && notification.call.state) {
+          const state = notification.call.state;
+          console.log('Call state:', state);
+
+          switch (state) {
+            case 'ringing':
+              setTelnyxCallStatus('ringing');
+              break;
+            case 'active':
+              setTelnyxCallStatus('active');
+              break;
+            case 'hangup':
+            case 'destroy':
+              setTelnyxCallStatus('idle');
+              break;
+          }
+        }
+      });
+
+      client.on('telnyx.error', (error) => {
+        console.error('Telnyx error:', error);
         setTelnyxCallStatus('error');
-        alert(`Failed to dial: ${dialError.message}`);
-      }
-    });
+        alert(`Telnyx error: ${error.message || 'Connection failed'}`);
+      });
 
-    client.on('telnyx.notification', (notification) => {
-      console.log('Notification received:', notification);
-      
-      if (notification.call && notification.call.state) {
-        const state = notification.call.state;
-        console.log('Call state:', state);
-        
-        switch (state) {
-          case 'ringing':
-            setTelnyxCallStatus('ringing');
-            break;
-          case 'active':
-            setTelnyxCallStatus('active');
-            break;
-          case 'hangup':
-          case 'destroy':
-            setTelnyxCallStatus('idle');
-            break;
-        }
-      }
-    });
+      await client.connect();
 
-    client.on('telnyx.error', (error) => {
-      console.error('Telnyx error:', error);
+    } catch (error) {
+      console.error('Failed to initialize Telnyx:', error);
       setTelnyxCallStatus('error');
-      alert(`Telnyx error: ${error.message || 'Connection failed'}`);
-    });
+      alert(`Initialization error: ${error.message}`);
+    }
+  };
 
-    // Connect the client
-    await client.connect();
-    
-  } catch (error) {
-    console.error('Failed to initialize Telnyx:', error);
-    setTelnyxCallStatus('error');
-    alert(`Initialization error: ${error.message}`);
-  }
-};
 
-  // End any active call
-  const endCall = () => {
+  const endTelnyxCall = () => {
     if (callMode === 'browser') {
       if (recognition.current) {
         recognition.current.stop();
@@ -472,8 +326,6 @@ const startTelnyxCallSimple = async () => {
       endTelnyxCall();
     }
   };
-
-  // Start call based on mode
   const startCall = () => {
     if (callMode === 'browser') {
       startBrowserVoiceCall();
@@ -482,7 +334,6 @@ const startTelnyxCallSimple = async () => {
     }
   };
 
-  // Send text message
   const sendMessage = async () => {
     if (!currentMessage.trim()) return;
 
@@ -494,7 +345,6 @@ const startTelnyxCallSimple = async () => {
     };
     setChatMessages(prev => [...prev, userMsg]);
 
-    // Check for emergency
     await checkForEmergency(currentMessage);
 
     const messageToSend = currentMessage;
@@ -533,7 +383,6 @@ const startTelnyxCallSimple = async () => {
     }
   };
 
-  // Toggle codeword active status
   const toggleCodeword = (id) => {
     setCodewords(prev => prev.map(cw => 
       cw.id === id ? { ...cw, active: !cw.active } : cw
@@ -543,60 +392,82 @@ const startTelnyxCallSimple = async () => {
   const isAnyCallActive = isCallActive || telnyxCallStatus === 'active';
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      {/* Emergency Alert */}
+    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '16px' }}>
       {emergencyTriggered && (
-        <div className="fixed top-4 left-4 right-4 z-50 bg-red-100 border border-red-600 p-4 rounded-lg mb-4 animate-pulse">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-6 h-6 text-red-600" />
-            <h4 className="text-red-800 font-bold">🚨 EMERGENCY TRIGGERED 🚨</h4>
+        <div style={{
+          position: 'fixed',
+          top: '16px',
+          left: '16px',
+          right: '16px',
+          zIndex: 50,
+          backgroundColor: '#fef2f2',
+          border: '1px solid #dc2626',
+          padding: '16px',
+          borderRadius: '8px',
+          marginBottom: '16px',
+          animation: 'pulse 2s infinite'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle style={{ width: '24px', height: '24px', color: '#dc2626' }} />
+            <h4 style={{ color: '#991b1b', fontWeight: 'bold' }}>🚨 EMERGENCY TRIGGERED 🚨</h4>
           </div>
-          <p className="text-red-700">Codeword: "{emergencyTriggered.codeword}"</p>
-          <p className="text-red-700">{emergencyTriggered.location.address}</p>
-          <p className="text-red-600 text-sm">Time: {emergencyTriggered.timestamp.toLocaleString()}</p>
+          <p style={{ color: '#b91c1c' }}>Codeword: "{emergencyTriggered.codeword}"</p>
+          <p style={{ color: '#b91c1c' }}>{emergencyTriggered.location.address}</p>
+          <p style={{ color: '#dc2626', fontSize: '14px' }}>Time: {emergencyTriggered.timestamp.toLocaleString()}</p>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Voice Assistant</h1>
-        <div className="flex gap-2 items-center">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#374151' }}>Voice Assistant</h1>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {isAnyCallActive && (
-            <span className="text-green-600 font-semibold flex items-center gap-1">
-              <div className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+            <span style={{ color: '#059669', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ width: '8px', height: '8px', backgroundColor: '#059669', borderRadius: '50%', animation: 'pulse 2s infinite' }}></div>
               {callMode === 'browser' ? 'Listening' : `Telnyx: ${telnyxCallStatus}`}
             </span>
           )}
-          <Bell className="text-gray-600 w-5 h-5" />
+          <Bell style={{ color: '#6b7280', width: '20px', height: '20px' }} />
         </div>
       </div>
 
-      {/* API Configuration */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <Key className="w-5 h-5" />
+      <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '16px', marginBottom: '24px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Key style={{ width: '20px', height: '20px' }} />
           API Configuration
         </h3>
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <label className="block text-sm font-medium mb-1">Groq API Key</label>
-            <div className="flex gap-2">
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Groq API Key</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <input
                 type={showApiKey ? "text" : "password"}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{
+                  flex: 1,
+                  padding: '8px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  outline: 'none'
+                }}
                 placeholder="Enter your Groq API key"
               />
               <button
                 onClick={() => setShowApiKey(!showApiKey)}
-                className="px-3 py-2 text-gray-600 border rounded-lg hover:bg-gray-50"
+                style={{
+                  padding: '8px 12px',
+                  color: '#6b7280',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  backgroundColor: 'white',
+                  cursor: 'pointer'
+                }}
               >
-                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showApiKey ? <EyeOff style={{ width: '16px', height: '16px' }} /> : <Eye style={{ width: '16px', height: '16px' }} />}
               </button>
             </div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className={`text-sm ${apiConfigured ? 'text-green-600' : 'text-red-600'}`}>
+            <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px', color: apiConfigured ? '#059669' : '#dc2626' }}>
                 {apiConfigured ? '✓ Configured' : '✗ Not configured'}
               </span>
             </div>
@@ -604,141 +475,173 @@ const startTelnyxCallSimple = async () => {
         </div>
       </div>
 
-      {/* Call Mode Selection */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <h3 className="text-lg font-semibold mb-3">Call Mode</h3>
-        <div className="flex gap-4">
-          <label className="flex items-center gap-2">
+      <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '16px', marginBottom: '24px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>Call Mode</h3>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
               type="radio"
               value="browser"
               checked={callMode === 'browser'}
               onChange={(e) => setCallMode(e.target.value)}
-              className="text-blue-600"
+              style={{ color: '#2563eb' }}
             />
             <span>Browser Voice (Speech Recognition)</span>
           </label>
-          <label className="flex items-center gap-2">
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
               type="radio"
               value="telnyx"
               checked={callMode === 'telnyx'}
               onChange={(e) => setCallMode(e.target.value)}
-              className="text-blue-600"
+              style={{ color: '#2563eb' }}
             />
             <span>Telnyx WebRTC</span>
           </label>
         </div>
       </div>
 
-      {/* Telnyx Configuration */}
       {callMode === 'telnyx' && (
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-lg font-semibold">Telnyx Configuration</h3>
+        <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '16px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600' }}>Telnyx Configuration</h3>
             <button
               onClick={() => setShowTelnyxConfig(!showTelnyxConfig)}
-              className="text-blue-600 hover:text-blue-800"
+              style={{ color: '#2563eb', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}
             >
-              <Settings className="w-5 h-5" />
+              <Settings style={{ width: '20px', height: '20px' }} />
             </button>
           </div>
           {showTelnyxConfig && (
-            <div className="space-y-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <input
                 type="text"
                 placeholder="SIP Username"
                 value={telnyxConfig.sipUsername}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, sipUsername: e.target.value }))}
-                className="w-full px-4 py-2 border rounded-lg"
+                style={{ width: '100%', padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '8px' }}
               />
               <input
                 type="password"
                 placeholder="SIP Password"
                 value={telnyxConfig.sipPassword}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, sipPassword: e.target.value }))}
-                className="w-full px-4 py-2 border rounded-lg"
+                style={{ width: '100%', padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '8px' }}
               />
               <input
                 type="text"
                 placeholder="Destination Number (optional)"
                 value={telnyxConfig.destinationNumber}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, destinationNumber: e.target.value }))}
-                className="w-full px-4 py-2 border rounded-lg"
+                style={{ width: '100%', padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '8px' }}
               />
             </div>
           )}
         </div>
       )}
 
-      {/* Voice Controls */}
-      <div className="flex gap-4 mb-6">
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
         {!isAnyCallActive ? (
           <button
             onClick={startCall}
             disabled={!apiConfigured}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: '#059669',
+              color: 'white',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              border: 'none',
+              cursor: apiConfigured ? 'pointer' : 'not-allowed',
+              opacity: apiConfigured ? 1 : 0.5
+            }}
           >
-            <Phone className="w-5 h-5" />
+            <Phone style={{ width: '20px', height: '20px' }} />
             Start {callMode === 'browser' ? 'Voice Chat' : 'Telnyx Call'}
           </button>
         ) : (
           <button
-            onClick={endCall}
-            className="bg-red-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-red-700"
+            onClick={endTelnyxCall}
+            style={{
+              backgroundColor: '#dc2626',
+              color: 'white',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              border: 'none',
+              cursor: 'pointer'
+            }}
           >
-            <PhoneOff className="w-5 h-5" />
+            <PhoneOff style={{ width: '20px', height: '20px' }} />
             End Call
           </button>
         )}
       </div>
 
-      {/* Live Transcript */}
       {transcript && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6">
-          <p className="text-sm text-blue-800">
+        <div style={{ backgroundColor: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '8px', padding: '12px', marginBottom: '24px' }}>
+          <p style={{ fontSize: '14px', color: '#1e40af' }}>
             <strong>You said:</strong> {transcript}
           </p>
         </div>
       )}
-      {/* Chat Interface */}
-      <div className="bg-white rounded-lg shadow-sm p-4">
-        <h3 className="text-lg font-semibold mb-4">Chat History</h3>
-        <div className="max-h-96 overflow-y-auto space-y-3 mb-4">
+
+      <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '16px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>Chat History</h3>
+        <div style={{ maxHeight: '384px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
           {chatMessages.map(msg => (
-            <div key={msg.id} className={`p-3 rounded-lg ${
-              msg.sender === 'user' 
-                ? 'bg-blue-100 ml-8 text-right' 
-                : 'bg-gray-100 mr-8 text-left'
-            }`}>
-              <p className="text-sm">{msg.text}</p>
-              <p className="text-xs text-gray-500 mt-1">
+            <div key={msg.id} style={{
+              padding: '12px',
+              borderRadius: '8px',
+              ...(msg.sender === 'user' 
+                ? { backgroundColor: '#dbeafe', marginLeft: '32px', textAlign: 'right' } 
+                : { backgroundColor: '#f3f4f6', marginRight: '32px', textAlign: 'left' })
+            }}>
+              <p style={{ fontSize: '14px' }}>{msg.text}</p>
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
                 {msg.timestamp.toLocaleTimeString()}
               </p>
             </div>
           ))}
           {isLoadingResponse && (
-            <div className="bg-gray-100 mr-8 p-3 rounded-lg">
-              <p className="text-sm text-gray-600">AI is thinking...</p>
+            <div style={{ backgroundColor: '#f3f4f6', marginRight: '32px', padding: '12px', borderRadius: '8px' }}>
+              <p style={{ fontSize: '14px', color: '#6b7280' }}>AI is thinking...</p>
             </div>
           )}
         </div>
         
-        {/* Text Input */}
-        <div className="flex gap-3">
+        <div style={{ display: 'flex', gap: '12px' }}>
           <input
             type="text"
             placeholder="Type your message..."
             value={currentMessage}
             onChange={(e) => setCurrentMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-            className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{
+              flex: 1,
+              padding: '8px 16px',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              outline: 'none'
+            }}
             disabled={isLoadingResponse}
           />
           <button
             onClick={sendMessage}
             disabled={isLoadingResponse || !currentMessage.trim()}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: '#2563eb',
+              color: 'white',
+              padding: '8px 24px',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: (isLoadingResponse || !currentMessage.trim()) ? 'not-allowed' : 'pointer',
+              opacity: (isLoadingResponse || !currentMessage.trim()) ? 0.5 : 1
+            }}
           >
             Send
           </button>
@@ -749,5 +652,3 @@ const startTelnyxCallSimple = async () => {
 };
 
 export default VoiceAssistantApp;
-
-

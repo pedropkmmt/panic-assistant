@@ -13,7 +13,6 @@
     "eject": "react-scripts eject"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.1.10",
     "@telnyx/webrtc": "^2.22.12",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
@@ -26,12 +25,10 @@
     "react-scripts": "5.0.1"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.21",
     "concurrently": "^8.2.0",
     "cross-env": "^7.0.3",
     "nodemon": "^3.0.1",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.10"
+    "react-refresh": "^0.17.0"
   },
   "eslintConfig": {
     "extends": [
