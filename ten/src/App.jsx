@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Phone, AlertTriangle, Bell, Key, Eye, EyeOff, PhoneOff, Mic, MicOff, Settings
+  Phone, AlertTriangle, Bell, Key, Eye, EyeOff, PhoneOff, Mic, MicOff, Settings, Send, Bot, User
 } from 'lucide-react';
-
 
 const VoiceAssistantApp = () => {
   const [chatMessages, setChatMessages] = useState([]);
@@ -12,9 +11,9 @@ const VoiceAssistantApp = () => {
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiConfigured, setApiConfigured] = useState(false);
   const [codewords, setCodewords] = useState([
-    { id: 1, phrase: "Whens the family gathering?", active: true },
+    { id: 1, phrase: "When is the family gathering?", active: true },
     { id: 2, phrase: "Are you still single?", active: true },
-    { id: 3, phrase: "Can you tell me if auntie is okay?", active: false }
+    { id: 3, phrase: "Can you tell me if auntie is okay?", active: true }
   ]);
   const [emergencyTriggered, setEmergencyTriggered] = useState(null);
   const [isCallActive, setIsCallActive] = useState(false);
@@ -23,19 +22,24 @@ const VoiceAssistantApp = () => {
   
   const [telnyxCallStatus, setTelnyxCallStatus] = useState('idle');
   const [telnyxConfig, setTelnyxConfig] = useState({
-    sipUsername: 'userpedromuttenda45174',
+    sipUsername: '',
     sipPassword: '',
-    destinationNumber: 'sip:userpedromuttenda45174@sip.telnyx.com'
+    destinationNumber: ''
   });
   const [showTelnyxConfig, setShowTelnyxConfig] = useState(false);
   
   const recognition = useRef(null);
   const telnyxClientRef = useRef(null);
   const telnyxCallRef = useRef(null);
+  const chatEndRef = useRef(null);
 
   useEffect(() => {
     setApiConfigured(apiKey.trim().length > 0);
   }, [apiKey]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
 
   const callGroq = async (message, messages = []) => {
     try {
@@ -236,9 +240,7 @@ const VoiceAssistantApp = () => {
     synth.speak(utterance);
   };
 
-
-
- const startTelnyxCall = async () => {
+  const startTelnyxCall = async () => {
     if (!telnyxConfig.sipUsername || !telnyxConfig.sipPassword) {
       alert('Please configure your Telnyx SIP credentials first.');
       setShowTelnyxConfig(true);
@@ -262,11 +264,8 @@ const VoiceAssistantApp = () => {
 
         try {
           const call = client.newCall({
-          destinationNumber: telnyxConfig.destinationNumber
+            destinationNumber: telnyxConfig.destinationNumber
           }); 
-
-telnyxCallRef.current = call;
-console.log('Dial to AI Assistant initiated');
 
           telnyxCallRef.current = call;
           console.log('Dial to AI Assistant initiated');
@@ -314,8 +313,7 @@ console.log('Dial to AI Assistant initiated');
     }
   };
 
-
-  const endTelnyxCall = () => {
+  const endCall = () => {
     if (callMode === 'browser') {
       if (recognition.current) {
         recognition.current.stop();
@@ -323,9 +321,13 @@ console.log('Dial to AI Assistant initiated');
       setIsCallActive(false);
       setTranscript('');
     } else {
-      endTelnyxCall();
+      if (telnyxCallRef.current) {
+        telnyxCallRef.current.hangup();
+      }
+      setTelnyxCallStatus('idle');
     }
   };
+
   const startCall = () => {
     if (callMode === 'browser') {
       startBrowserVoiceCall();
@@ -383,238 +385,493 @@ console.log('Dial to AI Assistant initiated');
     }
   };
 
-  const toggleCodeword = (id) => {
-    setCodewords(prev => prev.map(cw => 
-      cw.id === id ? { ...cw, active: !cw.active } : cw
-    ));
-  };
-
   const isAnyCallActive = isCallActive || telnyxCallStatus === 'active';
 
+  const styles = {
+    container: {
+      minHeight: '100vh',
+      background: 'grey',
+      padding: '20px',
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    },
+    emergencyAlert: {
+      position: 'fixed',
+      top: '20px',
+      left: '20px',
+      right: '20px',
+      zIndex: 1000,
+      background: 'linear-gradient(135deg, #ff6b6b, #ee5a52)',
+      color: 'white',
+      padding: '20px',
+      borderRadius: '16px',
+      boxShadow: '0 10px 30px rgba(255, 107, 107, 0.3)',
+      animation: 'pulse 2s infinite, slideDown 0.5s ease-out',
+      border: '2px solid rgba(255, 255, 255, 0.2)'
+    },
+    header: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '30px',
+      padding: '0 10px'
+    },
+    title: {
+      fontSize: '32px',
+      fontWeight: '700',
+      color: 'white',
+      textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+      letterSpacing: '-0.5px'
+    },
+    statusContainer: {
+      display: 'flex',
+      gap: '15px',
+      alignItems: 'center'
+    },
+    activeStatus: {
+      color: '#4ade80',
+      fontWeight: '600',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      background: 'rgba(74, 222, 128, 0.1)',
+      padding: '8px 16px',
+      borderRadius: '20px',
+      backdropFilter: 'blur(10px)'
+    },
+    pulsingDot: {
+      width: '10px',
+      height: '10px',
+      backgroundColor: '#4ade80',
+      borderRadius: '50%',
+      animation: 'pulse 2s infinite'
+    },
+    card: {
+      background: 'rgba(255, 255, 255, 0.95)',
+      borderRadius: '20px',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+      padding: '24px',
+      marginBottom: '24px',
+      backdropFilter: 'blur(20px)',
+      border: '1px solid rgba(255, 255, 255, 0.2)',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+    },
+    cardHover: {
+      transform: 'translateY(-2px)',
+      boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)'
+    },
+    cardTitle: {
+      fontSize: '20px',
+      fontWeight: '600',
+      marginBottom: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      color: '#1f2937'
+    },
+    input: {
+      width: '100%',
+      padding: '12px 16px',
+      border: '2px solid #e5e7eb',
+      borderRadius: '12px',
+      fontSize: '14px',
+      transition: 'all 0.2s ease',
+      background: 'rgba(255, 255, 255, 0.8)',
+      outline: 'none'
+    },
+    inputFocus: {
+      borderColor: '#667eea',
+      boxShadow: '0 0 0 3px rgba(102, 126, 234, 0.1)',
+      background: 'white'
+    },
+    button: {
+      padding: '12px 24px',
+      borderRadius: '12px',
+      border: 'none',
+      fontWeight: '600',
+      fontSize: '14px',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      position: 'relative',
+      outline: 'none'
+    },
+    primaryButton: {
+      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+      color: 'white',
+      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)'
+    },
+    primaryButtonHover: {
+      transform: 'translateY(-1px)',
+      boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
+    },
+    successButton: {
+      background: 'linear-gradient(135deg, #10b981, #059669)',
+      color: 'white',
+      boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
+    },
+    dangerButton: {
+      background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+      color: 'white',
+      boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)'
+    },
+    chatContainer: {
+      height: '500px',
+      overflowY: 'auto',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+      marginBottom: '20px',
+      padding: '10px',
+      scrollbarWidth: 'thin',
+      scrollbarColor: '#cbd5e1 transparent'
+    },
+    messageUser: {
+      alignSelf: 'flex-end',
+      maxWidth: '80%',
+      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+      color: 'white',
+      padding: '12px 16px',
+      borderRadius: '18px 18px 4px 18px',
+      boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+      animation: 'slideInRight 0.3s ease-out'
+    },
+    messageAI: {
+      alignSelf: 'flex-start',
+      maxWidth: '80%',
+      background: 'rgba(248, 250, 252, 0.9)',
+      color: '#1f2937',
+      padding: '12px 16px',
+      borderRadius: '18px 18px 18px 4px',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+      border: '1px solid rgba(226, 232, 240, 0.5)',
+      animation: 'slideInLeft 0.3s ease-out'
+    },
+    messageText: {
+      fontSize: '14px',
+      lineHeight: '1.5',
+      margin: '0'
+    },
+    timestamp: {
+      fontSize: '11px',
+      opacity: 0.7,
+      marginTop: '4px'
+    },
+    inputContainer: {
+      display: 'flex',
+      gap: '12px',
+      alignItems: 'flex-end'
+    },
+    transcriptBox: {
+      background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
+      border: '2px solid #3b82f6',
+      borderRadius: '12px',
+      padding: '16px',
+      marginBottom: '20px',
+      animation: 'fadeIn 0.3s ease-out'
+    },
+    loadingDots: {
+      display: 'flex',
+      gap: '4px',
+      alignItems: 'center'
+    },
+    dot: {
+      width: '6px',
+      height: '6px',
+      borderRadius: '50%',
+      backgroundColor: '#9ca3af',
+      animation: 'bounce 1.4s infinite ease-in-out'
+    },
+    radioGroup: {
+      display: 'flex',
+      gap: '20px',
+      flexWrap: 'wrap'
+    },
+    radioLabel: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      cursor: 'pointer',
+      padding: '10px 16px',
+      borderRadius: '10px',
+      transition: 'background-color 0.2s ease',
+      background: 'rgba(248, 250, 252, 0.5)'
+    },
+    radioLabelActive: {
+      background: 'rgba(102, 126, 234, 0.1)',
+      color: '#667eea'
+    }
+  };
+
+  const keyframes = `
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @keyframes slideDown {
+      from { transform: translateY(-100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideInLeft {
+      from { transform: translateX(-100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+    .dot:nth-child(1) { animation-delay: -0.32s; }
+    .dot:nth-child(2) { animation-delay: -0.16s; }
+    .dot:nth-child(3) { animation-delay: 0s; }
+  `;
+
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '16px' }}>
+    <div style={styles.container}>
+      <style>{keyframes}</style>
+      
       {emergencyTriggered && (
-        <div style={{
-          position: 'fixed',
-          top: '16px',
-          left: '16px',
-          right: '16px',
-          zIndex: 50,
-          backgroundColor: '#fef2f2',
-          border: '1px solid #dc2626',
-          padding: '16px',
-          borderRadius: '8px',
-          marginBottom: '16px',
-          animation: 'pulse 2s infinite'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertTriangle style={{ width: '24px', height: '24px', color: '#dc2626' }} />
-            <h4 style={{ color: '#991b1b', fontWeight: 'bold' }}>🚨 EMERGENCY TRIGGERED 🚨</h4>
+        <div style={styles.emergencyAlert}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            <AlertTriangle size={28} />
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>🚨 EMERGENCY TRIGGERED 🚨</h3>
           </div>
-          <p style={{ color: '#b91c1c' }}>Codeword: "{emergencyTriggered.codeword}"</p>
-          <p style={{ color: '#b91c1c' }}>{emergencyTriggered.location.address}</p>
-          <p style={{ color: '#dc2626', fontSize: '14px' }}>Time: {emergencyTriggered.timestamp.toLocaleString()}</p>
+          <p style={{ margin: '8px 0', fontSize: '16px' }}>Codeword: "{emergencyTriggered.codeword}"</p>
+          <p style={{ margin: '8px 0', fontSize: '14px' }}>{emergencyTriggered.location.address}</p>
+          <p style={{ margin: '8px 0', fontSize: '12px', opacity: 0.9 }}>
+            Time: {emergencyTriggered.timestamp.toLocaleString()}
+          </p>
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#374151' }}>Voice Assistant</h1>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={styles.header}>
+        <h1 style={styles.title}>Silent Guardian</h1>
+        <div style={styles.statusContainer}>
           {isAnyCallActive && (
-            <span style={{ color: '#059669', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <div style={{ width: '8px', height: '8px', backgroundColor: '#059669', borderRadius: '50%', animation: 'pulse 2s infinite' }}></div>
+            <div style={styles.activeStatus}>
+              <div style={styles.pulsingDot}></div>
               {callMode === 'browser' ? 'Listening' : `Telnyx: ${telnyxCallStatus}`}
-            </span>
+            </div>
           )}
-          <Bell style={{ color: '#6b7280', width: '20px', height: '20px' }} />
+          <Bell size={24} color="white" style={{ opacity: 0.8 }} />
         </div>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '16px', marginBottom: '24px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Key style={{ width: '20px', height: '20px' }} />
+      {/* API Configuration */}
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>
+          <Key size={20} />
           API Configuration
         </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>Groq API Key</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type={showApiKey ? "text" : "password"}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: '8px 16px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  outline: 'none'
-                }}
-                placeholder="Enter your Groq API key"
-              />
-              <button
-                onClick={() => setShowApiKey(!showApiKey)}
-                style={{
-                  padding: '8px 12px',
-                  color: '#6b7280',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  backgroundColor: 'white',
-                  cursor: 'pointer'
-                }}
-              >
-                {showApiKey ? <EyeOff style={{ width: '16px', height: '16px' }} /> : <Eye style={{ width: '16px', height: '16px' }} />}
-              </button>
-            </div>
-            <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '14px', color: apiConfigured ? '#059669' : '#dc2626' }}>
-                {apiConfigured ? '✓ Configured' : '✗ Not configured'}
-              </span>
-            </div>
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px', color: '#374151' }}>
+            Groq API Key
+          </label>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <input
+              type={showApiKey ? "text" : "password"}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              style={styles.input}
+              placeholder="Enter your Groq API key"
+            />
+            <button
+              onClick={() => setShowApiKey(!showApiKey)}
+              style={{...styles.button, ...styles.primaryButton, minWidth: '48px', justifyContent: 'center'}}
+            >
+              {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ 
+              fontSize: '14px', 
+              color: apiConfigured ? '#10b981' : '#ef4444',
+              fontWeight: '500'
+            }}>
+              {apiConfigured ? '✓ Configured' : '✗ Not configured'}
+            </span>
           </div>
         </div>
       </div>
 
-      <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '16px', marginBottom: '24px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '12px' }}>Call Mode</h3>
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+     
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>Call Mode</h3>
+        <div style={styles.radioGroup}>
+          <label style={{
+            ...styles.radioLabel,
+            ...(callMode === 'browser' ? styles.radioLabelActive : {})
+          }}>
             <input
               type="radio"
               value="browser"
               checked={callMode === 'browser'}
               onChange={(e) => setCallMode(e.target.value)}
-              style={{ color: '#2563eb' }}
+              style={{ accentColor: '#667eea' }}
             />
-            <span>Browser Voice (Speech Recognition)</span>
+            <span style={{ fontWeight: '500' }}>Browser Voice (Speech Recognition)</span>
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{
+            ...styles.radioLabel,
+            ...(callMode === 'telnyx' ? styles.radioLabelActive : {})
+          }}>
             <input
               type="radio"
               value="telnyx"
               checked={callMode === 'telnyx'}
               onChange={(e) => setCallMode(e.target.value)}
-              style={{ color: '#2563eb' }}
+              style={{ accentColor: '#667eea' }}
             />
-            <span>Telnyx WebRTC</span>
+            <span style={{ fontWeight: '500' }}>Telnyx WebRTC</span>
           </label>
         </div>
       </div>
 
+
       {callMode === 'telnyx' && (
-        <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '16px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600' }}>Telnyx Configuration</h3>
+        <div style={styles.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={styles.cardTitle}>Telnyx Configuration</h3>
             <button
               onClick={() => setShowTelnyxConfig(!showTelnyxConfig)}
-              style={{ color: '#2563eb', backgroundColor: 'transparent', border: 'none', cursor: 'pointer' }}
+              style={{...styles.button, ...styles.primaryButton, minWidth: '48px', justifyContent: 'center'}}
             >
-              <Settings style={{ width: '20px', height: '20px' }} />
+              <Settings size={16} />
             </button>
           </div>
           {showTelnyxConfig && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <input
                 type="text"
                 placeholder="SIP Username"
                 value={telnyxConfig.sipUsername}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, sipUsername: e.target.value }))}
-                style={{ width: '100%', padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+                style={styles.input}
               />
               <input
                 type="password"
                 placeholder="SIP Password"
                 value={telnyxConfig.sipPassword}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, sipPassword: e.target.value }))}
-                style={{ width: '100%', padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+                style={styles.input}
               />
               <input
                 type="text"
                 placeholder="Destination Number (optional)"
                 value={telnyxConfig.destinationNumber}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, destinationNumber: e.target.value }))}
-                style={{ width: '100%', padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '8px' }}
+                style={styles.input}
               />
             </div>
           )}
         </div>
       )}
-
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', justifyContent: 'center' }}>
         {!isAnyCallActive ? (
           <button
             onClick={startCall}
             disabled={!apiConfigured}
             style={{
-              backgroundColor: '#059669',
-              color: 'white',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              border: 'none',
-              cursor: apiConfigured ? 'pointer' : 'not-allowed',
-              opacity: apiConfigured ? 1 : 0.5
+              ...styles.button,
+              ...styles.successButton,
+              ...(apiConfigured ? {} : { opacity: 0.5, cursor: 'not-allowed' }),
+              fontSize: '16px',
+              padding: '16px 32px'
             }}
           >
-            <Phone style={{ width: '20px', height: '20px' }} />
+            <Phone size={20} />
             Start {callMode === 'browser' ? 'Voice Chat' : 'Telnyx Call'}
           </button>
         ) : (
           <button
-            onClick={endTelnyxCall}
+            onClick={endCall}
             style={{
-              backgroundColor: '#dc2626',
-              color: 'white',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              border: 'none',
-              cursor: 'pointer'
+              ...styles.button,
+              ...styles.dangerButton,
+              fontSize: '16px',
+              padding: '16px 32px'
             }}
           >
-            <PhoneOff style={{ width: '20px', height: '20px' }} />
+            <PhoneOff size={20} />
             End Call
           </button>
         )}
       </div>
-
       {transcript && (
-        <div style={{ backgroundColor: '#eff6ff', border: '1px solid #3b82f6', borderRadius: '8px', padding: '12px', marginBottom: '24px' }}>
-          <p style={{ fontSize: '14px', color: '#1e40af' }}>
+        <div style={styles.transcriptBox}>
+          <p style={{ fontSize: '14px', color: '#1e40af', margin: 0 }}>
             <strong>You said:</strong> {transcript}
           </p>
         </div>
       )}
-
-      <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '16px' }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>Chat History</h3>
-        <div style={{ maxHeight: '384px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-          {chatMessages.map(msg => (
-            <div key={msg.id} style={{
-              padding: '12px',
-              borderRadius: '8px',
-              ...(msg.sender === 'user' 
-                ? { backgroundColor: '#dbeafe', marginLeft: '32px', textAlign: 'right' } 
-                : { backgroundColor: '#f3f4f6', marginRight: '32px', textAlign: 'left' })
+      <div style={styles.card}>
+        <h3 style={styles.cardTitle}>
+          <Bot size={20} />
+          Chat History
+        </h3>
+        
+        <div style={styles.chatContainer}>
+          {chatMessages.length === 0 && (
+            <div style={{ 
+              textAlign: 'center', 
+              color: '#6b7280', 
+              padding: '40px 20px',
+              fontSize: '16px'
             }}>
-              <p style={{ fontSize: '14px' }}>{msg.text}</p>
-              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                {msg.timestamp.toLocaleTimeString()}
-              </p>
-            </div>
-          ))}
-          {isLoadingResponse && (
-            <div style={{ backgroundColor: '#f3f4f6', marginRight: '32px', padding: '12px', borderRadius: '8px' }}>
-              <p style={{ fontSize: '14px', color: '#6b7280' }}>AI is thinking...</p>
+              <Bot size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
+              <p>Start a conversation by typing a message or starting a voice call!</p>
             </div>
           )}
+          
+          {chatMessages.map(msg => (
+            <div 
+              key={msg.id} 
+              style={msg.sender === 'user' ? styles.messageUser : styles.messageAI}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                {msg.sender === 'ai' && (
+                  <Bot size={16} style={{ marginTop: '2px', opacity: 0.7 }} />
+                )}
+                <div style={{ flex: 1 }}>
+                  <p style={styles.messageText}>{msg.text}</p>
+                  <p style={styles.timestamp}>
+                    {msg.timestamp.toLocaleTimeString()}
+                  </p>
+                </div>
+                {msg.sender === 'user' && (
+                  <User size={16} style={{ marginTop: '2px', opacity: 0.7 }} />
+                )}
+              </div>
+            </div>
+          ))}
+          
+          {isLoadingResponse && (
+            <div style={styles.messageAI}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <Bot size={16} style={{ marginTop: '2px', opacity: 0.7 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={styles.loadingDots}>
+                    <span>AI is thinking</span>
+                    <div className="dot" style={styles.dot}></div>
+                    <div className="dot" style={styles.dot}></div>
+                    <div className="dot" style={styles.dot}></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
         </div>
         
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={styles.inputContainer}>
           <input
             type="text"
             placeholder="Type your message..."
@@ -622,11 +879,9 @@ console.log('Dial to AI Assistant initiated');
             onChange={(e) => setCurrentMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
             style={{
-              flex: 1,
-              padding: '8px 16px',
-              border: '1px solid #d1d5db',
-              borderRadius: '8px',
-              outline: 'none'
+              ...styles.input,
+              margin: 0,
+              minHeight: '48px'
             }}
             disabled={isLoadingResponse}
           />
@@ -634,16 +889,15 @@ console.log('Dial to AI Assistant initiated');
             onClick={sendMessage}
             disabled={isLoadingResponse || !currentMessage.trim()}
             style={{
-              backgroundColor: '#2563eb',
-              color: 'white',
-              padding: '8px 24px',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: (isLoadingResponse || !currentMessage.trim()) ? 'not-allowed' : 'pointer',
-              opacity: (isLoadingResponse || !currentMessage.trim()) ? 0.5 : 1
+              ...styles.button,
+              ...styles.primaryButton,
+              minHeight: '48px',
+              minWidth: '48px',
+              justifyContent: 'center',
+              ...(isLoadingResponse || !currentMessage.trim() ? { opacity: 0.5, cursor: 'not-allowed' } : {})
             }}
           >
-            Send
+            <Send size={18} />
           </button>
         </div>
       </div>
