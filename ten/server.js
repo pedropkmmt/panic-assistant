@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: './.env' });
 const fs = require('fs');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -6,7 +6,7 @@ const cors = require('cors');
 const path = require('path');
 const app = express();
 
-// Enhanced CORS for development
+
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:3001', /\.loca\.lt$/, /\.cloudflareaccess\.com$/, /\.ngrok\.io$/, /\.trycloudflare\.com$/],
   credentials: true
@@ -15,12 +15,11 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Add this middleware to handle tunnel hosts
+
 app.use((req, res, next) => {
-  // Log incoming requests for debugging
+ 
   console.log(`${req.method} ${req.path} from ${req.headers.host || 'unknown'}`);
   
-  // Allow various tunnel services
   const allowedHosts = [
     'localhost',
     '.loca.lt',
@@ -40,11 +39,10 @@ app.use((req, res, next) => {
     next();
   } else {
     console.warn(`Blocked request from host: ${host}`);
-    next(); // Allow anyway for development
+    next(); 
   }
 });
 
-// Only serve static files in production
 if (process.env.NODE_ENV === 'production' && fs.existsSync(path.join(__dirname, 'build'))) {
   app.use(express.static(path.join(__dirname, 'build')));
   console.log('📦 Serving static files from build directory');
@@ -140,7 +138,7 @@ const checkEmergencyCodewords = (text) => {
   return CODEWORDS.find(codeword => lowerText.includes(codeword.toLowerCase()));
 };
 
-// Test endpoint for webhook testing
+
 app.post('/test-webhook', (req, res) => {
   console.log('Test webhook received:', req.body);
   res.json({ 
@@ -339,12 +337,6 @@ app.put('/api/emergency/alerts/:id/handled', (req, res) => {
   }
 });
 
-// Handle favicon requests
-app.get('/favicon.ico', (req, res) => {
-  res.status(204).end();
-});
-
-// Enhanced health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -356,7 +348,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Only serve React app in production
 app.get('*', (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     const buildPath = path.join(__dirname, 'build', 'index.html');
@@ -381,7 +372,6 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Enhanced server startup
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 Health check: http://localhost:${PORT}/health`);
@@ -392,7 +382,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-// Graceful shutdown handlers
+
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {

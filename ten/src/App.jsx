@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Phone, AlertTriangle, Bell, Key, Eye, EyeOff, PhoneOff, Mic, MicOff, Settings, Send, Bot, User
+  Phone, AlertTriangle, Bell, Key, Eye, EyeOff, PhoneOff, Settings, Send, Bot, User
 } from 'lucide-react';
 
 const VoiceAssistantApp = () => {
@@ -21,10 +22,13 @@ const VoiceAssistantApp = () => {
   const [callMode, setCallMode] = useState('browser'); 
   
   const [telnyxCallStatus, setTelnyxCallStatus] = useState('idle');
+  const [telnyxApiKey, setTelnyxApiKey] = useState('');
+  const [showTelnyxApiKey, setShowTelnyxApiKey] = useState(false);
+  const [telnyxApiConfigured, setTelnyxApiConfigured] = useState(false);
   const [telnyxConfig, setTelnyxConfig] = useState({
-    sipUsername: '',
+    sipUsername: 'userpedromuttenda12144',
     sipPassword: '',
-    destinationNumber: ''
+    destinationNumber: 'sip:userpedromuttenda12144@sip.telnyx.com'
   });
   const [showTelnyxConfig, setShowTelnyxConfig] = useState(false);
   
@@ -36,6 +40,10 @@ const VoiceAssistantApp = () => {
   useEffect(() => {
     setApiConfigured(apiKey.trim().length > 0);
   }, [apiKey]);
+
+  useEffect(() => {
+    setTelnyxApiConfigured(telnyxApiKey.trim().length > 0);
+  }, [telnyxApiKey]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -241,6 +249,11 @@ const VoiceAssistantApp = () => {
   };
 
   const startTelnyxCall = async () => {
+    if (!telnyxApiConfigured) {
+      alert('Please configure your Telnyx API key first.');
+      return;
+    }
+
     if (!telnyxConfig.sipUsername || !telnyxConfig.sipPassword) {
       alert('Please configure your Telnyx SIP credentials first.');
       setShowTelnyxConfig(true);
@@ -254,7 +267,8 @@ const VoiceAssistantApp = () => {
 
       const client = new TelnyxRTC({
         login: telnyxConfig.sipUsername,
-        password: telnyxConfig.sipPassword
+        password: telnyxConfig.sipPassword,
+        api_key: telnyxApiKey
       });
 
       telnyxClientRef.current = client;
@@ -324,6 +338,9 @@ const VoiceAssistantApp = () => {
       if (telnyxCallRef.current) {
         telnyxCallRef.current.hangup();
       }
+      if (telnyxClientRef.current) {
+        telnyxClientRef.current.disconnect();
+      }
       setTelnyxCallStatus('idle');
     }
   };
@@ -386,293 +403,93 @@ const VoiceAssistantApp = () => {
   };
 
   const isAnyCallActive = isCallActive || telnyxCallStatus === 'active';
-
-  const styles = {
-    container: {
-      minHeight: '100vh',
-      background: 'grey',
-      padding: '20px',
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    },
-    emergencyAlert: {
-      position: 'fixed',
-      top: '20px',
-      left: '20px',
-      right: '20px',
-      zIndex: 1000,
-      background: 'linear-gradient(135deg, #ff6b6b, #ee5a52)',
-      color: 'white',
-      padding: '20px',
-      borderRadius: '16px',
-      boxShadow: '0 10px 30px rgba(255, 107, 107, 0.3)',
-      animation: 'pulse 2s infinite, slideDown 0.5s ease-out',
-      border: '2px solid rgba(255, 255, 255, 0.2)'
-    },
-    header: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: '30px',
-      padding: '0 10px'
-    },
-    title: {
-      fontSize: '32px',
-      fontWeight: '700',
-      color: 'white',
-      textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-      letterSpacing: '-0.5px'
-    },
-    statusContainer: {
-      display: 'flex',
-      gap: '15px',
-      alignItems: 'center'
-    },
-    activeStatus: {
-      color: '#4ade80',
-      fontWeight: '600',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      background: 'rgba(74, 222, 128, 0.1)',
-      padding: '8px 16px',
-      borderRadius: '20px',
-      backdropFilter: 'blur(10px)'
-    },
-    pulsingDot: {
-      width: '10px',
-      height: '10px',
-      backgroundColor: '#4ade80',
-      borderRadius: '50%',
-      animation: 'pulse 2s infinite'
-    },
-    card: {
-      background: 'rgba(255, 255, 255, 0.95)',
-      borderRadius: '20px',
-      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-      padding: '24px',
-      marginBottom: '24px',
-      backdropFilter: 'blur(20px)',
-      border: '1px solid rgba(255, 255, 255, 0.2)',
-      transition: 'transform 0.2s ease, box-shadow 0.2s ease'
-    },
-    cardHover: {
-      transform: 'translateY(-2px)',
-      boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)'
-    },
-    cardTitle: {
-      fontSize: '20px',
-      fontWeight: '600',
-      marginBottom: '16px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      color: '#1f2937'
-    },
-    input: {
-      width: '100%',
-      padding: '12px 16px',
-      border: '2px solid #e5e7eb',
-      borderRadius: '12px',
-      fontSize: '14px',
-      transition: 'all 0.2s ease',
-      background: 'rgba(255, 255, 255, 0.8)',
-      outline: 'none'
-    },
-    inputFocus: {
-      borderColor: '#667eea',
-      boxShadow: '0 0 0 3px rgba(102, 126, 234, 0.1)',
-      background: 'white'
-    },
-    button: {
-      padding: '12px 24px',
-      borderRadius: '12px',
-      border: 'none',
-      fontWeight: '600',
-      fontSize: '14px',
-      cursor: 'pointer',
-      transition: 'all 0.2s ease',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      position: 'relative',
-      outline: 'none'
-    },
-    primaryButton: {
-      background: 'linear-gradient(135deg, #667eea, #764ba2)',
-      color: 'white',
-      boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)'
-    },
-    primaryButtonHover: {
-      transform: 'translateY(-1px)',
-      boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
-    },
-    successButton: {
-      background: 'linear-gradient(135deg, #10b981, #059669)',
-      color: 'white',
-      boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)'
-    },
-    dangerButton: {
-      background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-      color: 'white',
-      boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)'
-    },
-    chatContainer: {
-      height: '500px',
-      overflowY: 'auto',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px',
-      marginBottom: '20px',
-      padding: '10px',
-      scrollbarWidth: 'thin',
-      scrollbarColor: '#cbd5e1 transparent'
-    },
-    messageUser: {
-      alignSelf: 'flex-end',
-      maxWidth: '80%',
-      background: 'linear-gradient(135deg, #667eea, #764ba2)',
-      color: 'white',
-      padding: '12px 16px',
-      borderRadius: '18px 18px 4px 18px',
-      boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
-      animation: 'slideInRight 0.3s ease-out'
-    },
-    messageAI: {
-      alignSelf: 'flex-start',
-      maxWidth: '80%',
-      background: 'rgba(248, 250, 252, 0.9)',
-      color: '#1f2937',
-      padding: '12px 16px',
-      borderRadius: '18px 18px 18px 4px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-      border: '1px solid rgba(226, 232, 240, 0.5)',
-      animation: 'slideInLeft 0.3s ease-out'
-    },
-    messageText: {
-      fontSize: '14px',
-      lineHeight: '1.5',
-      margin: '0'
-    },
-    timestamp: {
-      fontSize: '11px',
-      opacity: 0.7,
-      marginTop: '4px'
-    },
-    inputContainer: {
-      display: 'flex',
-      gap: '12px',
-      alignItems: 'flex-end'
-    },
-    transcriptBox: {
-      background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
-      border: '2px solid #3b82f6',
-      borderRadius: '12px',
-      padding: '16px',
-      marginBottom: '20px',
-      animation: 'fadeIn 0.3s ease-out'
-    },
-    loadingDots: {
-      display: 'flex',
-      gap: '4px',
-      alignItems: 'center'
-    },
-    dot: {
-      width: '6px',
-      height: '6px',
-      borderRadius: '50%',
-      backgroundColor: '#9ca3af',
-      animation: 'bounce 1.4s infinite ease-in-out'
-    },
-    radioGroup: {
-      display: 'flex',
-      gap: '20px',
-      flexWrap: 'wrap'
-    },
-    radioLabel: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      cursor: 'pointer',
-      padding: '10px 16px',
-      borderRadius: '10px',
-      transition: 'background-color 0.2s ease',
-      background: 'rgba(248, 250, 252, 0.5)'
-    },
-    radioLabelActive: {
-      background: 'rgba(102, 126, 234, 0.1)',
-      color: '#667eea'
-    }
-  };
-
-  const keyframes = `
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-    @keyframes slideDown {
-      from { transform: translateY(-100%); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    @keyframes slideInRight {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-    @keyframes slideInLeft {
-      from { transform: translateX(-100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    @keyframes bounce {
-      0%, 80%, 100% { transform: scale(0); }
-      40% { transform: scale(1); }
-    }
-    .dot:nth-child(1) { animation-delay: -0.32s; }
-    .dot:nth-child(2) { animation-delay: -0.16s; }
-    .dot:nth-child(3) { animation-delay: 0s; }
-  `;
+  const canStartCall = callMode === 'browser' ? apiConfigured : (apiConfigured && telnyxApiConfigured);
 
   return (
-    <div style={styles.container}>
-      <style>{keyframes}</style>
+    <div style={{
+      minHeight: '100vh',
+      background: '#f5f5f5',
+      padding: '20px',
+      fontFamily: 'Arial, sans-serif'
+    }}>
       
       {emergencyTriggered && (
-        <div style={styles.emergencyAlert}>
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          left: '20px',
+          right: '20px',
+          zIndex: 1000,
+          background: '#ff4444',
+          color: 'white',
+          padding: '20px',
+          border: '2px solid #cc0000',
+          borderRadius: '8px',
+          boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
             <AlertTriangle size={28} />
-            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700' }}>🚨 EMERGENCY TRIGGERED 🚨</h3>
+            <h3 style={{ margin: 0, fontSize: '18px' }}>🚨 EMERGENCY TRIGGERED 🚨</h3>
           </div>
-          <p style={{ margin: '8px 0', fontSize: '16px' }}>Codeword: "{emergencyTriggered.codeword}"</p>
-          <p style={{ margin: '8px 0', fontSize: '14px' }}>{emergencyTriggered.location.address}</p>
-          <p style={{ margin: '8px 0', fontSize: '12px', opacity: 0.9 }}>
+          <p style={{ margin: '8px 0' }}>Codeword: "{emergencyTriggered.codeword}"</p>
+          <p style={{ margin: '8px 0' }}>{emergencyTriggered.location.address}</p>
+          <p style={{ margin: '8px 0' }}>Calling Police</p>
+          <p style={{ margin: '8px 0' }}>Texting Emergency Contact </p>
+          <p style={{ margin: '8px 0', fontSize: '12px' }}>
             Time: {emergencyTriggered.timestamp.toLocaleString()}
           </p>
         </div>
       )}
 
-      <div style={styles.header}>
-        <h1 style={styles.title}>Silent Guardian</h1>
-        <div style={styles.statusContainer}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '30px',
+        padding: '20px',
+        background: '#333',
+        color: 'white',
+        borderRadius: '8px'
+      }}>
+        <h1 style={{ margin: 0, fontSize: '24px' }}>Silent Guardian</h1>
+        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
           {isAnyCallActive && (
-            <div style={styles.activeStatus}>
-              <div style={styles.pulsingDot}></div>
+            <div style={{
+              color: '#4CAF50',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'rgba(76, 175, 80, 0.2)',
+              padding: '8px 16px',
+              borderRadius: '20px'
+            }}>
+              <div style={{
+                width: '8px',
+                height: '8px',
+                backgroundColor: '#4CAF50',
+                borderRadius: '50%'
+              }}></div>
               {callMode === 'browser' ? 'Listening' : `Telnyx: ${telnyxCallStatus}`}
             </div>
           )}
-          <Bell size={24} color="white" style={{ opacity: 0.8 }} />
+          <Bell size={24} />
         </div>
       </div>
 
-      {/* API Configuration */}
-      <div style={styles.card}>
-        <h3 style={styles.cardTitle}>
+     
+      <div style={{
+        background: 'white',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '20px',
+        border: '1px solid #ddd'
+      }}>
+        <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Key size={20} />
           API Configuration
         </h3>
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: '500', marginBottom: '8px', color: '#374151' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
             Groq API Key
           </label>
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -680,69 +497,158 @@ const VoiceAssistantApp = () => {
               type={showApiKey ? "text" : "password"}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              style={styles.input}
+              style={{
+                flex: 1,
+                padding: '10px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
               placeholder="Enter your Groq API key"
             />
             <button
               onClick={() => setShowApiKey(!showApiKey)}
-              style={{...styles.button, ...styles.primaryButton, minWidth: '48px', justifyContent: 'center'}}
+              style={{
+                padding: '10px',
+                background: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center'
+              }}
             >
               {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
-          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ marginTop: '8px' }}>
             <span style={{ 
               fontSize: '14px', 
-              color: apiConfigured ? '#10b981' : '#ef4444',
-              fontWeight: '500'
+              color: apiConfigured ? '#28a745' : '#dc3545',
+              fontWeight: 'bold'
             }}>
               {apiConfigured ? '✓ Configured' : '✗ Not configured'}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+            Telnyx API Key
+          </label>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <input
+              type={showTelnyxApiKey ? "text" : "password"}
+              value={telnyxApiKey}
+              onChange={(e) => setTelnyxApiKey(e.target.value)}
+              style={{
+                flex: 1,
+                padding: '10px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}
+              placeholder="Enter your Telnyx API key"
+            />
+            <button
+              onClick={() => setShowTelnyxApiKey(!showTelnyxApiKey)}
+              style={{
+                padding: '10px',
+                background: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+            >
+              {showTelnyxApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <div style={{ marginTop: '8px' }}>
+            <span style={{ 
+              fontSize: '14px', 
+              color: telnyxApiConfigured ? '#28a745' : '#dc3545',
+              fontWeight: 'bold'
+            }}>
+              {telnyxApiConfigured ? '✓ Configured' : '✗ Not configured'}
             </span>
           </div>
         </div>
       </div>
 
      
-      <div style={styles.card}>
-        <h3 style={styles.cardTitle}>Call Mode</h3>
-        <div style={styles.radioGroup}>
+      <div style={{
+        background: 'white',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBottom: '20px',
+        border: '1px solid #ddd'
+      }}>
+        <h3 style={{ margin: '0 0 16px 0' }}>Call Mode</h3>
+        <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
           <label style={{
-            ...styles.radioLabel,
-            ...(callMode === 'browser' ? styles.radioLabelActive : {})
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            padding: '10px',
+            borderRadius: '4px',
+            background: callMode === 'browser' ? '#e3f2fd' : '#f8f9fa'
           }}>
             <input
               type="radio"
               value="browser"
               checked={callMode === 'browser'}
               onChange={(e) => setCallMode(e.target.value)}
-              style={{ accentColor: '#667eea' }}
             />
-            <span style={{ fontWeight: '500' }}>Browser Voice (Speech Recognition)</span>
+            <span>Speech Recognition</span>
           </label>
           <label style={{
-            ...styles.radioLabel,
-            ...(callMode === 'telnyx' ? styles.radioLabelActive : {})
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            padding: '10px',
+            borderRadius: '4px',
+            background: callMode === 'telnyx' ? '#e3f2fd' : '#f8f9fa'
           }}>
             <input
               type="radio"
               value="telnyx"
               checked={callMode === 'telnyx'}
               onChange={(e) => setCallMode(e.target.value)}
-              style={{ accentColor: '#667eea' }}
             />
-            <span style={{ fontWeight: '500' }}>Telnyx WebRTC</span>
+            <span>Telnyx WebRTC</span>
           </label>
         </div>
       </div>
 
-
+      
       {callMode === 'telnyx' && (
-        <div style={styles.card}>
+        <div style={{
+          background: 'white',
+          borderRadius: '8px',
+          padding: '20px',
+          marginBottom: '20px',
+          border: '1px solid #ddd'
+        }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={styles.cardTitle}>Telnyx Configuration</h3>
+            <h3 style={{ margin: 0 }}>Telnyx SIP Configuration</h3>
             <button
               onClick={() => setShowTelnyxConfig(!showTelnyxConfig)}
-              style={{...styles.button, ...styles.primaryButton, minWidth: '48px', justifyContent: 'center'}}
+              style={{
+                padding: '8px',
+                background: '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center'
+              }}
             >
               <Settings size={16} />
             </button>
@@ -754,37 +660,60 @@ const VoiceAssistantApp = () => {
                 placeholder="SIP Username"
                 value={telnyxConfig.sipUsername}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, sipUsername: e.target.value }))}
-                style={styles.input}
+                style={{
+                  padding: '10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
               />
               <input
                 type="password"
                 placeholder="SIP Password"
                 value={telnyxConfig.sipPassword}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, sipPassword: e.target.value }))}
-                style={styles.input}
+                style={{
+                  padding: '10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
               />
               <input
                 type="text"
-                placeholder="Destination Number (optional)"
+                placeholder="Destination Number"
                 value={telnyxConfig.destinationNumber}
                 onChange={(e) => setTelnyxConfig(prev => ({ ...prev, destinationNumber: e.target.value }))}
-                style={styles.input}
+                style={{
+                  padding: '10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
               />
             </div>
           )}
         </div>
       )}
+
+      
       <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', justifyContent: 'center' }}>
         {!isAnyCallActive ? (
           <button
             onClick={startCall}
-            disabled={!apiConfigured}
+            disabled={!canStartCall}
             style={{
-              ...styles.button,
-              ...styles.successButton,
-              ...(apiConfigured ? {} : { opacity: 0.5, cursor: 'not-allowed' }),
+              padding: '16px 32px',
+              background: canStartCall ? '#28a745' : '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: canStartCall ? 'pointer' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
               fontSize: '16px',
-              padding: '16px 32px'
+              fontWeight: 'bold'
             }}
           >
             <Phone size={20} />
@@ -794,10 +723,17 @@ const VoiceAssistantApp = () => {
           <button
             onClick={endCall}
             style={{
-              ...styles.button,
-              ...styles.dangerButton,
+              padding: '16px 32px',
+              background: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
               fontSize: '16px',
-              padding: '16px 32px'
+              fontWeight: 'bold'
             }}
           >
             <PhoneOff size={20} />
@@ -805,26 +741,48 @@ const VoiceAssistantApp = () => {
           </button>
         )}
       </div>
+
+      
       {transcript && (
-        <div style={styles.transcriptBox}>
-          <p style={{ fontSize: '14px', color: '#1e40af', margin: 0 }}>
+        <div style={{
+          background: '#e3f2fd',
+          border: '2px solid #2196f3',
+          borderRadius: '8px',
+          padding: '16px',
+          marginBottom: '20px'
+        }}>
+          <p style={{ fontSize: '14px', color: '#1976d2', margin: 0 }}>
             <strong>You said:</strong> {transcript}
           </p>
         </div>
       )}
-      <div style={styles.card}>
-        <h3 style={styles.cardTitle}>
+
+      
+      <div style={{
+        background: 'white',
+        borderRadius: '8px',
+        padding: '20px',
+        border: '1px solid #ddd'
+      }}>
+        <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Bot size={20} />
           Chat History
         </h3>
         
-        <div style={styles.chatContainer}>
+        <div style={{
+          height: '400px',
+          overflowY: 'auto',
+          border: '1px solid #eee',
+          borderRadius: '4px',
+          padding: '16px',
+          marginBottom: '16px',
+          background: '#fafafa'
+        }}>
           {chatMessages.length === 0 && (
             <div style={{ 
               textAlign: 'center', 
-              color: '#6b7280', 
-              padding: '40px 20px',
-              fontSize: '16px'
+              color: '#666', 
+              padding: '40px 20px'
             }}>
               <Bot size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
               <p>Start a conversation by typing a message or starting a voice call!</p>
@@ -834,15 +792,27 @@ const VoiceAssistantApp = () => {
           {chatMessages.map(msg => (
             <div 
               key={msg.id} 
-              style={msg.sender === 'user' ? styles.messageUser : styles.messageAI}
+              style={{
+                marginBottom: '16px',
+                padding: '12px',
+                borderRadius: '8px',
+                maxWidth: '80%',
+                marginLeft: msg.sender === 'user' ? 'auto' : '0',
+                marginRight: msg.sender === 'user' ? '0' : 'auto',
+                background: msg.sender === 'user' ? '#007bff' : '#f8f9fa',
+                color: msg.sender === 'user' ? 'white' : '#333',
+                border: msg.sender === 'user' ? 'none' : '1px solid #dee2e6'
+              }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                 {msg.sender === 'ai' && (
                   <Bot size={16} style={{ marginTop: '2px', opacity: 0.7 }} />
                 )}
                 <div style={{ flex: 1 }}>
-                  <p style={styles.messageText}>{msg.text}</p>
-                  <p style={styles.timestamp}>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '14px', lineHeight: '1.4' }}>
+                    {msg.text}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '11px', opacity: 0.7 }}>
                     {msg.timestamp.toLocaleTimeString()}
                   </p>
                 </div>
@@ -854,16 +824,18 @@ const VoiceAssistantApp = () => {
           ))}
           
           {isLoadingResponse && (
-            <div style={styles.messageAI}>
+            <div style={{
+              marginBottom: '16px',
+              padding: '12px',
+              borderRadius: '8px',
+              maxWidth: '80%',
+              background: '#f8f9fa',
+              border: '1px solid #dee2e6'
+            }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                 <Bot size={16} style={{ marginTop: '2px', opacity: 0.7 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={styles.loadingDots}>
-                    <span>AI is thinking</span>
-                    <div className="dot" style={styles.dot}></div>
-                    <div className="dot" style={styles.dot}></div>
-                    <div className="dot" style={styles.dot}></div>
-                  </div>
+                <div>
+                  <span style={{ fontSize: '14px' }}>AI is thinking...</span>
                 </div>
               </div>
             </div>
@@ -871,17 +843,19 @@ const VoiceAssistantApp = () => {
           <div ref={chatEndRef} />
         </div>
         
-        <div style={styles.inputContainer}>
+        <div style={{ display: 'flex', gap: '12px' }}>
           <input
             type="text"
             placeholder="Type your message..."
             value={currentMessage}
             onChange={(e) => setCurrentMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
             style={{
-              ...styles.input,
-              margin: 0,
-              minHeight: '48px'
+              flex: 1,
+              padding: '12px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '14px'
             }}
             disabled={isLoadingResponse}
           />
@@ -889,12 +863,14 @@ const VoiceAssistantApp = () => {
             onClick={sendMessage}
             disabled={isLoadingResponse || !currentMessage.trim()}
             style={{
-              ...styles.button,
-              ...styles.primaryButton,
-              minHeight: '48px',
-              minWidth: '48px',
-              justifyContent: 'center',
-              ...(isLoadingResponse || !currentMessage.trim() ? { opacity: 0.5, cursor: 'not-allowed' } : {})
+              padding: '12px 16px',
+              background: (isLoadingResponse || !currentMessage.trim()) ? '#6c757d' : '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: (isLoadingResponse || !currentMessage.trim()) ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center'
             }}
           >
             <Send size={18} />
