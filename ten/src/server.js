@@ -1,0 +1,366 @@
+require('dotenv').config();
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const path = require('path');
+const app = express();
+
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Serve static files from React build
+app.use(express.static(path.join(__dirname, 'build')));
+
+// Configuration
+const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const PORT = process.env.PORT || 3000;
+
+// Emergency codewords (case insensitive)
+const CODEWORDS = [
+  "whens the family gathering",
+  "are you still single", 
+  "can you tell me if auntie is okay",
+  "help me",
+  "emergency",
+  "call police"
+];
+
+// Store for emergency alerts
+let emergencyAlerts = [];
+
+// Utility function to call Telnyx Call Control API
+const callTelnyxAPI = async (callControlId, action, body = {}) => {
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/${action}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TELNYX_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const result = await response.text();
+    
+    if (!response.ok) {
+      console.error(`Telnyx API ${action} failed:`, response.status, result);
+      throw new Error(`Telnyx API error: ${response.status}`);
+    }
+    
+    console.log(`Telnyx ${action} success:`, result);
+    return response;
+  } catch (error) {
+    console.error(`Telnyx API ${action} error:`, error);
+    throw error;
+  }
+};
+
+// Function to get AI response from Groq
+const getGroqResponse = async (message, context = []) => {
+  try {
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "llama3-70b-8192",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful voice assistant. Keep responses brief and natural for voice conversation. If someone seems distressed, respond calmly and supportively."
+          },
+          ...context.slice(-3), // Include recent context
+          { role: "user", content: message }
+        ],
+        max_tokens: 100,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Groq API error:', response.status, await response.text());
+      throw new Error(`Groq API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error('Groq API call failed:', error);
+    return "I'm having trouble connecting right now. Please try again.";
+  }
+};
+
+// Check if message contains emergency codewords
+const checkEmergencyCodewords = (text) => {
+  const lowerText = text.toLowerCase();
+  return CODEWORDS.find(codeword => lowerText.includes(codeword.toLowerCase()));
+};
+
+// Store conversation context per call
+const conversationContext = new Map();
+
+// Telnyx webhook endpoint
+app.post('/webhook/telnyx', async (req, res) => {
+  try {
+    console.log('Received webhook:', JSON.stringify(req.body, null, 2));
+    
+    const event = req.body.data?.payload;
+    if (!event) {
+      console.error('No payload in webhook');
+      return res.status(400).send('No payload');
+    }
+
+    const callId = event.call_control_id;
+    const eventType = event.event_type;
+
+    console.log(`Processing event: ${eventType} for call: ${callId}`);
+
+    switch (eventType) {
+      case 'call.initiated':
+        console.log('Call initiated, answering...');
+        await callTelnyxAPI(callId, 'answer');
+        break;
+
+      case 'call.answered':
+        console.log('Call answered, starting conversation...');
+        
+        // Initialize conversation context
+        conversationContext.set(callId, []);
+        
+        await callTelnyxAPI(callId, 'speak', {
+          payload: 'Hello! You are connected to your AI voice assistant. I can help you with questions or just chat. What would you like to talk about?',
+          voice: 'female',
+          language: 'en-US'
+        });
+        
+        // Start gathering speech input
+        await callTelnyxAPI(callId, 'gather', {
+          input_type: 'speech',
+          language: 'en-US',
+          timeout: 30,
+          max_length: 200,
+          speech_end_silence_timeout: 2000
+        });
+        break;
+
+      case 'gather.ended':
+        console.log('Gather ended, processing speech...');
+        
+        const spokenText = event.result || '';
+        const confidence = event.confidence || 0;
+        
+        console.log(`User said: "${spokenText}" (confidence: ${confidence})`);
+        
+        if (!spokenText) {
+          await callTelnyxAPI(callId, 'speak', {
+            payload: "I didn't catch that. Could you please repeat?",
+            voice: 'female',
+            language: 'en-US'
+          });
+          
+          // Continue gathering
+          await callTelnyxAPI(callId, 'gather', {
+            input_type: 'speech',
+            language: 'en-US',
+            timeout: 30,
+            max_length: 200,
+            speech_end_silence_timeout: 2000
+          });
+          break;
+        }
+
+        // Get conversation context
+        const context = conversationContext.get(callId) || [];
+        
+        // Check for emergency codewords
+        const emergencyCodeword = checkEmergencyCodewords(spokenText);
+        let aiResponse;
+        
+        if (emergencyCodeword) {
+          console.log(`EMERGENCY DETECTED: "${emergencyCodeword}"`);
+          
+          // Log emergency
+          const emergencyAlert = {
+            id: Date.now(),
+            callId: callId,
+            codeword: emergencyCodeword,
+            message: spokenText,
+            timestamp: new Date().toISOString(),
+            handled: false
+          };
+          emergencyAlerts.push(emergencyAlert);
+          
+          aiResponse = "I understand you may need help. Emergency services have been notified. Please stay on the line. Are you in immediate danger?";
+          
+          // You could add actual emergency service integration here
+          // For example: send SMS, call emergency contact, etc.
+          
+        } else {
+          // Get AI response from Groq
+          aiResponse = await getGroqResponse(spokenText, context);
+        }
+        
+        // Update conversation context
+        context.push({ role: 'user', content: spokenText });
+        context.push({ role: 'assistant', content: aiResponse });
+        conversationContext.set(callId, context.slice(-6)); // Keep last 6 messages
+        
+        // Speak the response
+        await callTelnyxAPI(callId, 'speak', {
+          payload: aiResponse,
+          voice: 'female',
+          language: 'en-US'
+        });
+        
+        // Continue the conversation
+        setTimeout(async () => {
+          try {
+            await callTelnyxAPI(callId, 'gather', {
+              input_type: 'speech',
+              language: 'en-US',
+              timeout: 30,
+              max_length: 200,
+              speech_end_silence_timeout: 2000
+            });
+          } catch (error) {
+            console.error('Error continuing conversation:', error);
+          }
+        }, 1000);
+        break;
+
+      case 'call.hangup':
+        console.log(`Call ${callId} ended`);
+        // Clean up conversation context
+        conversationContext.delete(callId);
+        break;
+
+      case 'call.machine.detection.ended':
+        console.log('Machine detection ended');
+        break;
+
+      case 'gather.started':
+        console.log('Gather started - listening for speech');
+        break;
+
+      default:
+        console.log(`Unhandled event type: ${eventType}`);
+    }
+
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// API endpoint for emergency notifications from frontend
+app.post('/api/emergency', (req, res) => {
+  try {
+    const { codeword, location, timestamp } = req.body;
+    
+    const emergencyAlert = {
+      id: Date.now(),
+      source: 'frontend',
+      codeword,
+      location,
+      timestamp: timestamp || new Date().toISOString(),
+      handled: false
+    };
+    
+    emergencyAlerts.push(emergencyAlert);
+    console.log('Emergency alert received from frontend:', emergencyAlert);
+    
+    // Here you could integrate with actual emergency services
+    // Examples:
+    // - Send SMS to emergency contacts
+    // - Post to emergency monitoring system
+    // - Trigger automated calls
+    
+    res.json({ success: true, alertId: emergencyAlert.id });
+  } catch (error) {
+    console.error('Emergency API error:', error);
+    res.status(500).json({ error: 'Failed to process emergency alert' });
+  }
+});
+
+// API endpoint to get emergency alerts
+app.get('/api/emergency/alerts', (req, res) => {
+  try {
+    res.json(emergencyAlerts);
+  } catch (error) {
+    console.error('Error fetching alerts:', error);
+    res.status(500).json({ error: 'Failed to fetch alerts' });
+  }
+});
+
+// API endpoint to mark emergency as handled
+app.put('/api/emergency/alerts/:id/handled', (req, res) => {
+  try {
+    const alertId = parseInt(req.params.id);
+    const alert = emergencyAlerts.find(a => a.id === alertId);
+    
+    if (alert) {
+      alert.handled = true;
+      alert.handledAt = new Date().toISOString();
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Alert not found' });
+    }
+  } catch (error) {
+    console.error('Error updating alert:', error);
+    res.status(500).json({ error: 'Failed to update alert' });
+  }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    activeConversations: conversationContext.size,
+    emergencyAlerts: emergencyAlerts.length
+  });
+});
+
+// Serve React app for all other routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('Unhandled error:', error);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📞 Telnyx webhook URL: http://your-domain.com/webhook/telnyx`);
+  console.log(`🔧 Health check: http://localhost:${PORT}/health`);
+  
+  // Validate environment variables
+  if (!TELNYX_API_KEY) {
+    console.warn('⚠️  TELNYX_API_KEY not set - Telnyx features will not work');
+  }
+  if (!GROQ_API_KEY) {
+    console.warn('⚠️  GROQ_API_KEY not set - AI responses will not work');
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  process.exit(0);
+});
