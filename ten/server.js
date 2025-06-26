@@ -6,12 +6,50 @@ const cors = require('cors');
 const path = require('path');
 const app = express();
 
-app.use(cors());
+// Enhanced CORS for development
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3001', /\.loca\.lt$/, /\.cloudflareaccess\.com$/, /\.ngrok\.io$/, /\.trycloudflare\.com$/],
+  credentials: true
+}));
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-if (fs.existsSync(path.join(__dirname, 'build'))) {
+// Add this middleware to handle tunnel hosts
+app.use((req, res, next) => {
+  // Log incoming requests for debugging
+  console.log(`${req.method} ${req.path} from ${req.headers.host || 'unknown'}`);
+  
+  // Allow various tunnel services
+  const allowedHosts = [
+    'localhost',
+    '.loca.lt',
+    '.ngrok.io',
+    '.trycloudflare.com',
+    '.herokuapp.com',
+    '.railway.app',
+    '.render.com'
+  ];
+  
+  const host = req.headers.host || '';
+  const isAllowed = allowedHosts.some(pattern => 
+    pattern.startsWith('.') ? host.includes(pattern) : host.includes(pattern)
+  );
+  
+  if (isAllowed || process.env.NODE_ENV === 'development') {
+    next();
+  } else {
+    console.warn(`Blocked request from host: ${host}`);
+    next(); // Allow anyway for development
+  }
+});
+
+// Only serve static files in production
+if (process.env.NODE_ENV === 'production' && fs.existsSync(path.join(__dirname, 'build'))) {
   app.use(express.static(path.join(__dirname, 'build')));
+  console.log('📦 Serving static files from build directory');
+} else if (process.env.NODE_ENV !== 'production') {
+  console.log('🔧 Development mode - static files served by React dev server');
 } else {
   console.log('📦 Build directory not found - run "npm run build" to create it');
 }
@@ -31,7 +69,7 @@ const CODEWORDS = [
 ];
 
 let emergencyAlerts = [];
-
+const conversationContext = new Map();
 
 const callTelnyxAPI = async (callControlId, action, body = {}) => {
   try {
@@ -59,7 +97,6 @@ const callTelnyxAPI = async (callControlId, action, body = {}) => {
     throw error;
   }
 };
-
 
 const getGroqResponse = async (message, context = []) => {
   try {
@@ -98,15 +135,20 @@ const getGroqResponse = async (message, context = []) => {
   }
 };
 
-
 const checkEmergencyCodewords = (text) => {
   const lowerText = text.toLowerCase();
   return CODEWORDS.find(codeword => lowerText.includes(codeword.toLowerCase()));
 };
 
-
-const conversationContext = new Map();
-
+// Test endpoint for webhook testing
+app.post('/test-webhook', (req, res) => {
+  console.log('Test webhook received:', req.body);
+  res.json({ 
+    message: 'Test webhook received successfully',
+    body: req.body,
+    headers: req.headers
+  });
+});
 
 app.post('/webhook/telnyx', async (req, res) => {
   try {
@@ -132,7 +174,6 @@ app.post('/webhook/telnyx', async (req, res) => {
       case 'call.answered':
         console.log('Call answered, starting conversation...');
         
-        
         conversationContext.set(callId, []);
         
         await callTelnyxAPI(callId, 'speak', {
@@ -140,7 +181,6 @@ app.post('/webhook/telnyx', async (req, res) => {
           voice: 'female',
           language: 'en-US'
         });
-        
         
         await callTelnyxAPI(callId, 'gather', {
           input_type: 'speech',
@@ -166,7 +206,6 @@ app.post('/webhook/telnyx', async (req, res) => {
             language: 'en-US'
           });
           
-        
           await callTelnyxAPI(callId, 'gather', {
             input_type: 'speech',
             language: 'en-US',
@@ -177,10 +216,8 @@ app.post('/webhook/telnyx', async (req, res) => {
           break;
         }
 
-       
         const context = conversationContext.get(callId) || [];
         
-      
         const emergencyCodeword = checkEmergencyCodewords(spokenText);
         let aiResponse;
         
@@ -200,16 +237,13 @@ app.post('/webhook/telnyx', async (req, res) => {
           aiResponse = "I understand you may need help. Emergency services have been notified. Please stay on the line. Are you in immediate danger?";
           
         } else {
-         
           aiResponse = await getGroqResponse(spokenText, context);
         }
-        
         
         context.push({ role: 'user', content: spokenText });
         context.push({ role: 'assistant', content: aiResponse });
         conversationContext.set(callId, context.slice(-6)); // Keep last 6 messages
         
-       
         await callTelnyxAPI(callId, 'speak', {
           payload: aiResponse,
           voice: 'female',
@@ -233,7 +267,6 @@ app.post('/webhook/telnyx', async (req, res) => {
 
       case 'call.hangup':
         console.log(`Call ${callId} ended`);
-       
         conversationContext.delete(callId);
         break;
 
@@ -255,7 +288,6 @@ app.post('/webhook/telnyx', async (req, res) => {
     res.status(500).send('Internal Server Error');
   }
 });
-
 
 app.post('/api/emergency', (req, res) => {
   try {
@@ -280,7 +312,6 @@ app.post('/api/emergency', (req, res) => {
   }
 });
 
-
 app.get('/api/emergency/alerts', (req, res) => {
   try {
     res.json(emergencyAlerts);
@@ -289,7 +320,6 @@ app.get('/api/emergency/alerts', (req, res) => {
     res.status(500).json({ error: 'Failed to fetch alerts' });
   }
 });
-
 
 app.put('/api/emergency/alerts/:id/handled', (req, res) => {
   try {
@@ -309,23 +339,39 @@ app.put('/api/emergency/alerts/:id/handled', (req, res) => {
   }
 });
 
+// Handle favicon requests
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
+});
+
+// Enhanced health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     activeConversations: conversationContext.size,
-    emergencyAlerts: emergencyAlerts.length
+    emergencyAlerts: emergencyAlerts.length,
+    host: req.headers.host,
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
+// Only serve React app in production
 app.get('*', (req, res) => {
-  const buildPath = path.join(__dirname, 'build', 'index.html');
-  if (fs.existsSync(buildPath)) {
-    res.sendFile(buildPath);
+  if (process.env.NODE_ENV === 'production') {
+    const buildPath = path.join(__dirname, 'build', 'index.html');
+    if (fs.existsSync(buildPath)) {
+      res.sendFile(buildPath);
+    } else {
+      res.status(404).json({ 
+        error: 'Build not found', 
+        message: 'Run "npm run build" to create the production build' 
+      });
+    }
   } else {
     res.status(404).json({ 
-      error: 'Build not found', 
-      message: 'Run "npm run build" to create the production build' 
+      error: 'Not found',
+      message: 'API endpoint not found. Frontend is served by React dev server on port 3001.'
     });
   }
 });
@@ -334,12 +380,31 @@ app.use((error, req, res, next) => {
   console.error('Unhandled error:', error);
   res.status(500).json({ error: 'Internal server error' });
 });
+
+// Enhanced server startup
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📱 Health check: http://localhost:${PORT}/health`);
+  console.log(`🔗 Webhook URL: http://localhost:${PORT}/webhook/telnyx`);
+  console.log(`🧪 Test webhook: http://localhost:${PORT}/test-webhook`);
+  console.log(`🔑 Telnyx API Key: ${TELNYX_API_KEY ? 'Set' : 'Missing'}`);
+  console.log(`🤖 Groq API Key: ${GROQ_API_KEY ? 'Set' : 'Missing'}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
+
+// Graceful shutdown handlers
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
-  process.exit(0);
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
-  process.exit(0);
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });

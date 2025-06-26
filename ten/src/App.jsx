@@ -23,9 +23,9 @@ const VoiceAssistantApp = () => {
   
   const [telnyxCallStatus, setTelnyxCallStatus] = useState('idle');
   const [telnyxConfig, setTelnyxConfig] = useState({
-    sipUsername: '',
+    sipUsername: 'userpedromuttenda45174',
     sipPassword: '',
-    destinationNumber: 'sip:assistant@your-app.sip.telnyx.com'
+    destinationNumber: 'sip:userpedromuttenda45174@sip.telnyx.com'
   });
   const [showTelnyxConfig, setShowTelnyxConfig] = useState(false);
   
